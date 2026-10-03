@@ -1,18 +1,18 @@
-from fastapi import APIRouter, Path
-from model import Todo
+from fastapi import APIRouter, Path, HTTPException, status
+from model import Todo, TodoItem, TodoItems
 
 
 todo_router = APIRouter()
 todo_list = []
 
 
-@todo_router.post("/todo")
+@todo_router.post("/todo", status_code=201)
 async def add_todo(todo: Todo) -> dict:
     todo_list.append(todo)
-    return {"message": "Задача успешно добавлена Русланом Киковым"}
+    return {"message": "Задача добавлена Русланом Киковым"}
 
 
-@todo_router.get("/todo")
+@todo_router.get("/todo", response_model=TodoItems)
 async def retrieve_todos() -> dict:
     return {"todos": todo_list}
 
@@ -24,4 +24,43 @@ async def get_single_todo(
     for todo in todo_list:
         if todo.id == todo_id:
             return {"todo": todo}
-    return {"message": "Задачи с таким ID не существует"}
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Задачи с таким ID не существует (Руслан Киков)"
+    )
+
+
+@todo_router.put("/todo/{todo_id}")
+async def update_todo(
+    todo_data: TodoItem,
+    todo_id: int = Path(..., title="ID задачи для обновления")
+) -> dict:
+    for todo in todo_list:
+        if todo.id == todo_id:
+            todo.item = todo_data.item
+            return {"message": "Задача обновлена Русланом Киковым"}
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Задачи с таким ID не существует (Руслан Киков)"
+    )
+
+
+@todo_router.delete("/todo/{todo_id}")
+async def delete_single_todo(
+    todo_id: int = Path(..., title="ID задачи для удаления")
+) -> dict:
+    for index in range(len(todo_list)):
+        todo = todo_list[index]
+        if todo.id == todo_id:
+            todo_list.pop(index)
+            return {"message": "Задача удалена Русланом Киковым"}
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Задачи с таким ID не существует (Руслан Киков)"
+    )
+
+
+@todo_router.delete("/todo")
+async def delete_all_todos() -> dict:
+    todo_list.clear()
+    return {"message": "Все задачи удалены Русланом Киковым"}
