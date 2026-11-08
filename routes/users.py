@@ -1,33 +1,33 @@
 from fastapi import APIRouter, HTTPException, status
-from models.users import NewUser, UserSignIn
+from database.connection import Database
+from models.users import User, UserSignIn
 
 user_router = APIRouter(tags=["User"])
-users = {}
-
+user_database = Database(User)
 
 @user_router.post("/signup")
-async def sign_new_user(data: NewUser) -> dict:
-    if data.email in users:
+async def sign_user_up(user: User) -> dict:
+    user_exist = await User.find_one(User.email == user.email)
+    if user_exist:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Пользователь с таким email уже существует"
+            detail="Пользователь с таким email уже существует."
         )
-    users[data.email] = data
-    return {"message": "Пользователь успешно зарегистрирован (Руслан Киков)"}
-
+    await user_database.save(user)
+    return {"message": "Пользователь успешно создан (Руслан Киков)"}
 
 @user_router.post("/signin")
 async def sign_user_in(user: UserSignIn) -> dict:
-    if user.email not in users:
+    user_exist = await User.find_one(User.email == user.email)
+    if not user_exist:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Пользователь не существует"
+            detail="Пользователь с таким email не найден."
         )
-    if users[user.email].password != user.password:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Неверные учетные данные"
-        )
-    return {"message": "Пользователь успешно вошел (Руслан Киков)"}
-
-
+    if user_exist.password == user.password:
+        return {"message": "Пользователь успешно вошёл (Руслан Киков)"}
+    
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Неверный пароль."
+    )

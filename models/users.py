@@ -1,27 +1,17 @@
+from typing import Optional
+from beanie import Document
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List
-from models.events import Event
 
-
-class User(BaseModel):
+class User(Document):
     email: EmailStr
     password: str
-    events: Optional[List[Event]] = None
+    # В методичке тут было поле events: Optional[List[Link[Event]]]
+    # Так как у нас тема АСКУЭ, мы можем связать пользователя со счётчиками (опционально)
+    # Для простоты оставим просто пустой список строк или вовсе уберем.
+    meters: Optional[list[str]] = [] 
 
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "email": "fastapi@packt.com",
-                "password": "Stro0ng!",
-                "events": []
-            }
-        }
-    }
-
-
-class NewUser(User):
-    pass
-
+    class Settings:
+        name = "users"
 
 class UserSignIn(BaseModel):
     email: EmailStr
