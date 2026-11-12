@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>АСКУЭ-Лайт | Умная панель</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #eef2f5; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 900px; margin: auto; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        h1 { text-align: center; color: #2c3e50; }
+        h2 { color: #34495e; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }
+        .row { display: flex; gap: 15px; margin-bottom: 15px; }
+        .col { flex: 1; }
+        label { font-weight: bold; font-size: 14px; display: block; margin-bottom: 5px; color: #7f8c8d;}
+        input, select { width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 5px; box-sizing: border-box; }
+        button { padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; color: white; background-color: #3498db; width: 100%; margin-top: 10px;}
+        button:hover { background-color: #2980b9; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ecf0f1; }
+        .status-ACCEPTED { color: #27ae60; font-weight: bold; }
+        .status-ANOMALY { color: #e74c3c; font-weight: bold; }
+        .status-CORRECTED { color: #f39c12; font-weight: bold; }
+        .msg { padding: 10px; border-radius: 5px; margin-top: 10px; text-align: center; font-weight: bold;}
+        .msg-success { background-color: #d4edda; color: #155724; }
+        .msg-error { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>⚡ АСКУЭ-Лайт</h1>
+
+    <div class="card">
+        <h2>1. Управление объектами</h2>
+        <div class="row">
+            <div class="col"><input type="text" id="objName" placeholder="Название (Кв. 1)"></div>
+            <div class="col"><input type="text" id="objAddress" placeholder="Адрес (ул. Ленина 10)"></div>
+        </div>
+        <button onclick="createObject()">Создать объект</button>
+        <div id="objMsg"></div>
+    </div>
+
+    <div class="card">
+        <h2>2. Управление счётчиками</h2>
+        <div class="row">
+            <div class="col">
+                <label>Привязать к объекту:</label>
+                <select id="objSelect"></select>
+            </div>
+            <div class="col">
+                <label>Серийный номер:</label>
+                <input type="text" id="meterSerial" placeholder="Например, SN-123">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <label>Модель счётчика:</label>
+                <select id="meterModelSelect">
+                    <option value="Меркурий 201">Меркурий 201 (Однофазный)</option>
+                    <option value="Меркурий 234">Меркурий 234 (Трёхфазный)</option>
+                    <option value="Энергомера CE101">Энергомера CE101 (Однофазный)</option>
+                    <option value="Энергомера CE308">Энергомера CE308 (Трёхфазный)</option>
+                    <option value="Микрон Р2">Микрон Р2 (Умный счётчик)</option>
+                </select>
+            </div>
+            <div class="col">
+                <label>Тарифный план:</label>
+                <select id="meterTariffSelect">
+                    <option value="T-1 (Одноставочный)">T-1 (Одноставочный)</option>
+                    <option value="T-2 (День/Ночь)">T-2 (День/Ночь)</option>
+                    <option value="T-3 (Трёхзонный)">T-3 (Пик/Полупик/Ночь)</option>
+                </select>
+            </div>
+        </div>
+        <button onclick="createMeter()">Добавить счётчик</button>
+        <div id="meterMsg"></div>
+    </div>
+
+    <div class="card">
+        <h2>3. Показания и аналитика</h2>
+        <div class="row">
+            <div class="col">
+                <label>Выберите счётчик:</label>
+                <select id="meterSelect" onchange="loadReadings()"></select>
+            </div>
+            <div class="col">
+                <label>Ввести показания:</label>
+                <div style="display:flex; gap:10px;">
+                    <input type="number" id="readingValue" placeholder="Значение">
+                    <button onclick="addReading()" style="width: 100px;">Ввести</button>
+                </div>
+            </div>
+        </div>
+        <div id="readingMsg"></div>
+        
+        <div id="tableContainer" style="display:none;">
+            <table>
+                <thead><tr><th>Дата</th><th>Значение</th><th>Статус</th></tr></thead>
+                <tbody id="readingsTable"></tbody>
+            </table>
+            <canvas id="myChart" style="margin-top:20px; max-height: 300px;"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+    const API_ASSETS = "http://127.0.0.1:8001";
+    const API_READINGS = "http://127.0.0.1:8002";
+    let chartInstance = null;
+
+    async function loadDropdowns() {
+        try {
+            const resObj = await fetch(`${API_ASSETS}/objects/`);
+            const objects = await resObj.json();
+            const objSelect = document.getElementById('objSelect');
+            objSelect.innerHTML = objects.length === 0 ? '<option value="">-- Нет объектов --</option>' 
+                : objects.map(o => `<option value="${o.id}">${o.name} (${o.address})</option>`).join('');
+
+            const resMeters = await fetch(`${API_ASSETS}/meters/`);
+            const meters = await resMeters.json();
+            const meterSelect = document.getElementById('meterSelect');
+            
+            // Теперь в выпадающем списке показываем и модель, чтобы было понятно
+            meterSelect.innerHTML = meters.length === 0 ? '<option value="">-- Нет счётчиков --</option>' 
+                : meters.map(m => `<option value="${m.serial_number}">${m.serial_number} [${m.model}]</option>`).join('');
+            
+            if (meters.length > 0) loadReadings();
+        } catch (e) { console.error("Ошибка загрузки", e); }
+    }
+
+    async function createObject() {
+        const name = document.getElementById('objName').value;
+        const address = document.getElementById('objAddress').value;
+        const msg = document.getElementById('objMsg');
+        if(!name || !address) { msg.className="msg msg-error"; msg.innerText="Заполните поля!"; return; }
+
+        const res = await fetch(`${API_ASSETS}/objects/`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name, address})
+        });
+        if(res.ok) {
+            msg.className="msg msg-success"; msg.innerText="Объект создан!";
+            document.getElementById('objName').value = '';
+            document.getElementById('objAddress').value = '';
+            loadDropdowns();
+        }
+    }
+
+    async function createMeter() {
+        const object_id = document.getElementById('objSelect').value;
+        const serial_number = document.getElementById('meterSerial').value;
+        // Берем выбранные модель и тариф из новых списков
+        const model = document.getElementById('meterModelSelect').value;
+        const tariff_id = document.getElementById('meterTariffSelect').value;
+        
+        const msg = document.getElementById('meterMsg');
+        if(!object_id || !serial_number) { msg.className="msg msg-error"; msg.innerText="Выберите объект и введите номер!"; return; }
+
+        const res = await fetch(`${API_ASSETS}/meters/`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({object_id, serial_number, model, tariff_id})
+        });
+        const data = await res.json();
+        if(res.ok) {
+            msg.className="msg msg-success"; msg.innerText=`Счётчик ${data.serial_number} (${data.model}) добавлен!`;
+            document.getElementById('meterSerial').value = '';
+            loadDropdowns();
+        } else { msg.className="msg msg-error"; msg.innerText=`Ошибка: ${data.detail}`; }
+    }
+
+    async function addReading() {
+        const meter_id = document.getElementById('meterSelect').value;
+        const value = parseFloat(document.getElementById('readingValue').value);
+        const msg = document.getElementById('readingMsg');
+        if(!meter_id || isNaN(value)) { msg.className="msg msg-error"; msg.innerText="Введите значение!"; return; }
+
+        const res = await fetch(`${API_READINGS}/readings/`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({meter_id, value, reading_date: new Date().toISOString(), source: "WEB"})
+        });
+        const data = await res.json();
+        if(res.ok) {
+            msg.className="msg msg-success"; msg.innerText="Показания сохранены!";
+            if(data.warning) { msg.className="msg msg-error"; msg.innerText=data.warning; }
+            document.getElementById('readingValue').value = '';
+            loadReadings();
+        } else { msg.className="msg msg-error"; msg.innerText=`Ошибка: ${data.detail}`; }
+    }
+
+    async function loadReadings() {
+        const meter_id = document.getElementById('meterSelect').value;
+        if(!meter_id) return;
+        document.getElementById('tableContainer').style.display = 'block';
+        
+        const res = await fetch(`${API_READINGS}/readings/${meter_id}`);
+        const readings = await res.json();
+        readings.sort((a,b) => new Date(a.reading_date) - new Date(b.reading_date));
+
+        document.getElementById('readingsTable').innerHTML = readings.map(r => `
+            <tr>
+                <td>${new Date(r.reading_date).toLocaleString()}</td>
+                <td>${r.value}</td>
+                <td class="status-${r.status}">${r.status}</td>
+            </tr>
+        `).join('');
+
+        drawChart(readings);
+    }
+
+    function drawChart(readings) {
+        const ctx = document.getElementById('myChart').getContext('2d');
+        if (chartInstance) chartInstance.destroy();
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: readings.map(r => new Date(r.reading_date).toLocaleDateString()),
+                datasets: [{ label: 'кВт·ч', data: readings.map(r => r.value), borderColor: '#3498db', fill: false, tension: 0.1 }]
+            }
+        });
+    }
+
+    window.onload = loadDropdowns;
+</script>
+</body>
+</html>
